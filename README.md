@@ -8,7 +8,7 @@ wall scattering.
 This program comes with a GPL licence. 
 If you use it for a scientific publication, you can cite:
 
-"Numerical Investigation of Reversed Gas Feed Configuration for Hall Thrusters",
+"Numerical Investigation of Reversed Gas Feed Configurations for Hall Thrusters",
 S. Boccelli, T.E. Magin, A. Frezzotti (submitted, 2020).
 
 Description 
@@ -39,12 +39,19 @@ This program comes in two versions: MAIN\_CUDA.cu and MAIN\_SERIAL.cpp.
 The CUDA version runs on NVidia GPUs with CUDA capabilities.
 On a GTX 760 it shows a speed-up of some 1600 times with respect to the serial
 version.
+You can set single or double precision by uncommenting the proper typedef
+in the very beginning of the code.
 
 Building the source
 -------------------------------
 
 #### CPU version
 
+The CPU version uses the Eigen library.
+Compile with:
+```
+$ g++ main.cpp -I/usr/local/eigen3/
+```
 
 #### GPU version
 
@@ -54,15 +61,15 @@ This program was tested for a compute capability = 3, on CUDA 10.2.
 
 Once CUDA is installed, use the nvcc compiler:
 ```
-  nvcc -lcurand main.cu 
+nvcc -lcurand main.cu 
 ```
 In case nvcc is not able to locate the librariues, just add them explicitly.
 You can add the include directory with "-I" 
 and the libraries directory with "-L".
 For example:
 ```
-  nvcc -I/opt/nvidia/hpc\_sdk/Linux\_x86\_64/2020/math\_libs/include \
-       -L/opt/nvidia/hpc\_sdk/Linux\_x86\_64/2020/math\_libs/lib64 \
-       -lcurand main.cu
+nvcc -I/opt/nvidia/hpc_sdk/Linux_x86_64/2020/math_libs/include \
+     -L/opt/nvidia/hpc_sdk/Linux_x86_64/2020/math_libs/lib64 \
+     -lcurand main.cu
 ```
 
