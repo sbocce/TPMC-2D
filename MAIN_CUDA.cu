@@ -43,11 +43,10 @@
 #define PI 3.1415926535
 #define KB 1.38064852E-23
 
-// typedef double fpTYPE; // Floating point type. Defined here for fast switching from double to float in case of GPU.
-typedef float fpTYPE; // Floating point type. Defined here for fast switching from double to float in case of GPU.
+// typedef double fpTYPE; // Double precision type. 
+typedef float fpTYPE; // Single precision type. 
 
 #include "ReadFiles_cuda.h"
-
 
 // ############################################################################
 
@@ -63,7 +62,6 @@ __device__ double rnum(curandState *state)
 {
   int th_id = threadIdx.x + blockIdx.x*blockDim.x;
 
-  // return ((double) rand() / (RAND_MAX));
   return curand_uniform_double(&state[th_id]);
 }
 
@@ -72,7 +70,7 @@ __device__ double rnum(curandState *state)
 __device__ void maxwellian(fpTYPE UX, fpTYPE UY, fpTYPE UZ, fpTYPE T, 
                            fpTYPE M, curandState *state, fpTYPE* vel_new)
 {
-  // Computes three velocities from a drifted Maxwellian
+  // Computes three velocities from a drifted Maxwellian distribution function
 
   for(size_t i = 0; i < 3; ++i)
   {
@@ -120,11 +118,14 @@ __device__ void interp2D(fpTYPE xP, fpTYPE yP,
                          fpTYPE *outparam)
 {
 
-  // xP is x3 in the paper reference frame;
-  // yP is R in the paper reference frame.
+// This function implements a simple bi-linear interpolation. 
+// See the referenced paper.
 
-  // i1  is the first index before the particle location, along x
-  // j1  is the first index before the particle location, along y
+// xP is x3 in the paper reference frame;
+// yP is R in the paper reference frame.
+
+// i1  is the first index before the particle location, along x
+// j1  is the first index before the particle location, along y
 
   fpTYPE Lx = xx[Nx-1] - xx[0]; 
   fpTYPE Ly = yy[Ny-1] - yy[0]; 
@@ -171,6 +172,11 @@ __device__ void interp2D(fpTYPE xP, fpTYPE yP,
  
 __device__ void collision_rotate_vel(fpTYPE& v1, fpTYPE& v2, fpTYPE& v3, fpTYPE* v_collpart, fpTYPE alpha, curandState *state)
 {
+// This function rotates the three velocity components, v1, v2 and v3 of the test particle,
+// for effect of a collision with a collision partner (whose velocity components are in the 
+// array v_collpart). The collision is assumed isotropic.
+// See A. Garcia, Numerical Methods for Physics.
+
   // Compute relative velocity
   fpTYPE g1 = v_collpart[0] - v1;
   fpTYPE g2 = v_collpart[1] - v2;
@@ -178,7 +184,7 @@ __device__ void collision_rotate_vel(fpTYPE& v1, fpTYPE& v2, fpTYPE& v3, fpTYPE*
 
   fpTYPE g = sqrt(g1*g1 + g2*g2 + g3*g3);
 
-  // Perform collision!
+  // Perform collision
   fpTYPE q = 2.0*pow(rnum(state), 1.0/alpha) - 1.0;
   fpTYPE cos_th = q;
   fpTYPE sin_th = sqrt(1.0 - q*q);
@@ -223,15 +229,21 @@ __global__ void myKernel(curandState *state, int pPERt, size_t Nx_BG, size_t Ny_
   fpTYPE Tinj   = 300.0; // [K]
   fpTYPE M     = 2.18e-25;  // [kg] particles mass
 
+  // Ionization region, where to track the particle residence time 
+  fpTYPE IZ_MIN_AXIAL = 0.013; // [m] 
+  fpTYPE IZ_MAX_AXIAL = 0.018; // [m] 
+
+  // ------------------------------------------------------
   // // Uniform injection from anode 
   // fpTYPE u1_inj = 0.0; // uR
   // fpTYPE u2_inj = 0.0; // utheta
   // fpTYPE u3_inj = 0.0; // uz
- 
+  //
   // Injection from slit 
   fpTYPE u1_inj = 88.975; // uR
   fpTYPE u2_inj = 0.0; // utheta
   fpTYPE u3_inj = -154.11; // uz
+  // ------------------------------------------------------
 
   int tID_glob = blockIdx.x*blockDim.x + threadIdx.x;
 
@@ -241,15 +253,17 @@ __global__ void myKernel(curandState *state, int pPERt, size_t Nx_BG, size_t Ny_
     size_t pID_global = IDp + tID_glob*pPERt;
     d_times[pID_global] = 0.0; // Init
 
+    // ------------------------------------------------------
     // // Inject particles from anode
     // x1 = rnum(state)*(R_chan_ext - R_chan_int)*0.98 + R_chan_int*1.001;
     // x2 = 0.0;
     // x3 = 0.0;
-
+    // 
     // Inject particles from side walls
     x1 = R_chan_int;
     x2 = 0.0;
     x3 = rnum(state)*0.001 + z_slit_start; // 1 mm slit
+    // ------------------------------------------------------
   
     fpTYPE vel_now[3];
     maxwellian(u1_inj, u2_inj, u3_inj, Tinj, M, state, vel_now);
@@ -259,17 +273,11 @@ __global__ void myKernel(curandState *state, int pPERt, size_t Nx_BG, size_t Ny_
     v3 = vel_now[2];
   
     // Loop until particle stays inside the domain
-    size_t counter = 0;
     while( x3 < Ldomain )
     {
-      // std::cout << "Advecting..." << std::endl;
-  
       // Timestep adjustment
-  
       fpTYPE v_abs = sqrt(v1*v1 + v2*v2 + v3*v3); 
-      fpTYPE dt = (Ldomain/(v_abs + 1.0e-5))/50.0; // so it takes 100 steps to do one full domain
-  
-      // Timestep adjustment
+      fpTYPE dt = (Ldomain/(v_abs + 1.0e-5))/50.0; // so it takes 50 steps to percurr one full domain
   
       // ++++++++ Advect particle ++++++++++++
       x1 += v1*dt;
@@ -382,6 +390,7 @@ __global__ void myKernel(curandState *state, int pPERt, size_t Nx_BG, size_t Ny_
       fpTYPE g2 = v2 - u2_bg_now; // Relative velocity
       fpTYPE g3 = v3 - u3_bg_now; // Relative velocity
 
+      // Analytical collision frequency
       fpTYPE nu = sig*n_bg_now/PI*sqrt(2*PI*KB*T_bg_now/M)*psi_HS(sqrt(g1*g1 + g2*g2 + g3*g3)*sqrt(M/(2*KB*T_bg_now)) );
       // SIMPLE CASE // fpTYPE nu = vTH_rel*n_bg_now*sig;// collision frequency
       // *****************************
@@ -398,14 +407,8 @@ __global__ void myKernel(curandState *state, int pPERt, size_t Nx_BG, size_t Ny_
         collision_rotate_vel(v1, v2, v3, v_collpart, alpha, state); 
       }
 
-      // DBDBDB - export some particles, for testing purposes
-      d_x1P[counter] = x1;
-      d_x2P[counter] = x2;
-      d_x3P[counter] = x3;
-      counter++;
-
       // Add timestep to particle residence time
-      if( (x3 <= 0.018) && (x3 >= 0.013) ) {
+      if( (x3 <= IZ_MAX_AXIAL) && (x3 >= IZ_MIN_AXIAL) ) {
         d_times[pID_global] += dt; // Add timestep
       }
 
@@ -419,8 +422,8 @@ __global__ void myKernel(curandState *state, int pPERt, size_t Nx_BG, size_t Ny_
 
 int main()
 {
+  // **** GPU settings: launch configuration *****
   int NTH = 512; // number of threads per block
-  // int NTH = 84; // number of threads per block
   int NB  = 60; // number of blocks
   int pPERt = 33; // particles per thread
 
@@ -429,17 +432,15 @@ int main()
   // int NB    = 1;
   // int pPERt = 1;
 
-  // std::cout << "We will simulate " << pPERt*NTH*NB << " particles." << std::endl;
+  std::cout << "We will simulate " << pPERt*NTH*NB << " particles." << std::endl;
 
   // ========= Setup PRNG on GPU ========================
   curandState *devStates;
   cudaMalloc((void **)&devStates, NB*NTH*sizeof(curandState));
 
   // ========= Load background gas data =================
-  fpTYPE z_slit_start = 0.015;
-  
-  // std::string dirname = "matrices_uniform/";
-  std::string dirname = "matrices_rev30_15_COLD/";
+  fpTYPE z_slit_start = 0.015; // Set slit location (starting point)
+  std::string dirname = "matrices_rev30_15_COLD/"; // Read data in this directory
 
   size_t Nx_BG, Ny_BG;
   std::ifstream f( (dirname + "MAT_N.dat").c_str() );  // Read first line of a random file
@@ -511,38 +512,30 @@ int main()
   cudaMalloc(&d_x2P, sizeof(fpTYPE)*Ntest);
   cudaMalloc(&d_x3P, sizeof(fpTYPE)*Ntest);
 
-  // for(size_t slitID = 0; slitID < 24; slitID++) {
-  //   fpTYPE z_slit_start = 0.024  - slitID*0.001;
-
-    initRNG_kernel<<<NB,NTH>>>(devStates);
-    myKernel<<<NB,NTH>>>(devStates, pPERt, Nx_BG, Ny_BG, d_xx, d_yy, d_N_BG, d_V1_BG, d_V2_BG, d_V3_BG, d_T_BG, d_times, d_x1P, d_x2P, d_x3P, z_slit_start);
-    
-    cudaMemcpy(h_times,  d_times,  sizeof(fpTYPE)*NB*NTH*pPERt, cudaMemcpyDeviceToHost);
+  initRNG_kernel<<<NB,NTH>>>(devStates);
+  myKernel<<<NB,NTH>>>(devStates, pPERt, Nx_BG, Ny_BG, d_xx, d_yy, d_N_BG, d_V1_BG, d_V2_BG, d_V3_BG, d_T_BG, d_times, d_x1P, d_x2P, d_x3P, z_slit_start);
   
-    // // Print residence times now
-    // for(size_t IDp = 0; IDp < NB*NTH*pPERt; ++IDp)
-    // {
-    //   std::cout << h_times[IDp] << std::endl;
-    // }
+  cudaMemcpy(h_times,  d_times,  sizeof(fpTYPE)*NB*NTH*pPERt, cudaMemcpyDeviceToHost);
   
-    // Compute average residence time
-    fpTYPE tau_ave = 0.0;
-    
-    for(size_t IDp = 0; IDp < NB*NTH*pPERt; ++IDp)
-    {
-      tau_ave += h_times[IDp]/(NB*NTH*pPERt);
-    }
-    
-    std::cout << z_slit_start << "  " << tau_ave << std::endl;
-
+  // -------------------------------------------
+  // // Uncomment this if you want to print the residence time
+  // // of every simulated particle
+  //
+  // for(size_t IDp = 0; IDp < NB*NTH*pPERt; ++IDp)
+  // {
+  //   std::cout << h_times[IDp] << std::endl;
   // }
-
-  // cudaMemcpy(h_x1P,  d_x1P,  sizeof(fpTYPE)*Ntest, cudaMemcpyDeviceToHost);
-  // cudaMemcpy(h_x2P,  d_x2P,  sizeof(fpTYPE)*Ntest, cudaMemcpyDeviceToHost);
-  // cudaMemcpy(h_x3P,  d_x3P,  sizeof(fpTYPE)*Ntest, cudaMemcpyDeviceToHost);
-
-  // for (size_t iii = 0; iii < Ntest; ++iii)
-  //   std::cout << h_x1P[iii] << " " << h_x2P[iii] << " " << h_x3P[iii] << std::endl;
+  // -------------------------------------------
+  
+  // Compute average residence time
+  fpTYPE tau_ave = 0.0;
+  
+  for(size_t IDp = 0; IDp < NB*NTH*pPERt; ++IDp)
+  {
+    tau_ave += h_times[IDp]/(NB*NTH*pPERt);
+  }
+    
+  std::cout << z_slit_start << "  " << tau_ave << std::endl;
 
   // ======== Freed memory =================
   cudaFree(devStates);
@@ -575,7 +568,6 @@ int main()
   delete[] h_x1P;
   delete[] h_x2P;
   delete[] h_x3P;
-
 
   return 0;
 }

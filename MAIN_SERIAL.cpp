@@ -46,8 +46,8 @@
 
 using namespace Eigen;
 
-// typedef double fpTYPE; // Floating point type. Defined here for fast switching from double to float in case of GPU.
-typedef float fpTYPE; // Floating point type. Defined here for fast switching from double to float in case of GPU.
+// typedef double fpTYPE; // Double precision type. 
+typedef float fpTYPE; // Single precision type. 
 
 // ############################################################################
 
