@@ -37,7 +37,7 @@ Description of the GPU version
 
 This program comes in two versions: MAIN\_CUDA.cu and MAIN\_SERIAL.cpp. 
 The CUDA version runs on NVidia GPUs with CUDA capabilities.
-On a GTX 760 it shows a speed-up of some 1600 times with respect to the serial
+On a GTX 760 it shows a speed-up of roughly 1600x with respect to the serial
 version.
 You can set single or double precision by uncommenting the proper typedef
 in the very beginning of the code.
