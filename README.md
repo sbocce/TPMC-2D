@@ -53,15 +53,16 @@ The version of CUDA that you need depends on the compute capability of your GPU.
 This program was tested for a compute capability = 3, on CUDA 10.2.
 
 Once CUDA is installed, use the nvcc compiler:
-
+```
   nvcc -lcurand main.cu 
-
+```
 In case nvcc is not able to locate the librariues, just add them explicitly.
 You can add the include directory with "-I" 
 and the libraries directory with "-L".
-On my system:
+For example:
+```
   nvcc -I/opt/nvidia/hpc\_sdk/Linux\_x86\_64/2020/math\_libs/include \
        -L/opt/nvidia/hpc\_sdk/Linux\_x86\_64/2020/math\_libs/lib64 \
        -lcurand main.cu
-
+```
 
