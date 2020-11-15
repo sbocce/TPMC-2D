@@ -1,4 +1,4 @@
-TPMC\_2D
+TPMC-2D
 ===============================
 
 A simple single-species Test-particle Monte Carlo (TPMC) algorithm in 2D 
